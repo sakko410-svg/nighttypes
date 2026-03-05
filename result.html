@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>診断結果｜NightType</title>
+
+  <!-- OGP（動的にJSで書き換え） -->
+  <meta property="og:title"       content="夜の価値観タイプ診断"/>
+  <meta property="og:description" content="あなたの夜のタイプが分かる診断"/>
+  <meta property="og:image"       content=""/>
+  <meta property="og:type"        content="website"/>
+  <meta name="twitter:card"       content="summary_large_image"/>
+  <meta name="twitter:title"      content="夜の価値観タイプ診断"/>
+  <meta name="twitter:description" content=""/>
+  <meta name="twitter:image"      content=""/>
+
+  <link rel="stylesheet" href="./style.css"/>
+  <style>
+    .result-char-img {
+      width:190px;height:190px;border-radius:50%;object-fit:cover;
+      border:2px solid var(--border);
+      box-shadow:0 0 50px rgba(124,58,237,0.45),0 0 90px rgba(236,72,153,0.2);
+      opacity:0;animation:popIn 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.3s forwards;
+    }
+    .result-char-fallback {
+      width:190px;height:190px;border-radius:50%;font-size:5rem;
+      display:flex;align-items:center;justify-content:center;
+      border:2px solid var(--border);
+      background:radial-gradient(circle at 30% 30%,rgba(124,58,237,0.3),rgba(10,10,15,0.8));
+      box-shadow:0 0 50px rgba(124,58,237,0.45);
+      opacity:0;animation:popIn 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.3s forwards;
+    }
+    .result-tagline{font-size:0.72rem;color:var(--purple-ll);font-family:'Syne',sans-serif;margin-bottom:10px;opacity:0;animation:popIn 0.6s ease 0.45s forwards;}
+
+    /* シェアカード */
+    .share-section{width:100%;margin-top:16px;opacity:0;animation:popIn 0.6s ease 1s forwards;}
+    .share-title{font-size:0.6rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;text-align:center;}
+
+    /* Canvas Card */
+    .card-preview-wrap{position:relative;width:100%;border-radius:16px;overflow:hidden;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);}
+    #shareCanvas{display:block;width:100%;height:auto;border-radius:16px;}
+
+    .share-btns{display:flex;flex-direction:column;gap:10px;}
+    .btn-x{
+      display:flex;align-items:center;justify-content:center;gap:10px;
+      width:100%;padding:16px;border-radius:14px;border:none;cursor:pointer;
+      background:#000;color:#fff;
+      font-family:'Syne',sans-serif;font-weight:700;font-size:0.82rem;letter-spacing:0.08em;
+      transition:all 0.22s;
+    }
+    .btn-x:hover{background:#111;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.5);}
+    .btn-x svg{width:18px;height:18px;fill:#fff;flex-shrink:0;}
+    .btn-dl{
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      width:100%;padding:16px;border-radius:14px;border:1px solid var(--border);
+      background:transparent;color:var(--purple-ll);
+      font-family:'Syne',sans-serif;font-weight:700;font-size:0.82rem;letter-spacing:0.08em;
+      cursor:pointer;transition:all 0.22s;text-decoration:none;
+    }
+    .btn-dl:hover{background:rgba(124,58,237,0.12);transform:translateY(-2px);}
+
+    /* ローディング */
+    .loading-overlay{
+      position:fixed;inset:0;z-index:300;
+      background:var(--bg);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
+      transition:opacity 0.6s ease;
+    }
+    .loading-overlay.hidden{opacity:0;pointer-events:none;}
+    .loading-ring{
+      width:64px;height:64px;border-radius:50%;
+      border:3px solid rgba(124,58,237,0.2);
+      border-top-color:var(--purple-l);
+      animation:spin 0.9s linear infinite;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loading-text{font-family:'Syne',sans-serif;font-size:0.75rem;letter-spacing:0.2em;color:var(--muted);text-transform:uppercase;}
+    .loading-chars{display:flex;gap:8px;}
+    .loading-chars img{width:40px;height:40px;border-radius:50%;object-fit:cover;opacity:0;animation:popIn 0.4s ease forwards;}
+  </style>
+  <!-- Google Analytics (GA_MEASUREMENT_IDをご自身のIDに置き換えてください) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'GA_MEASUREMENT_ID');
+  </script>
+</head>
+<body>
+
+<!-- ローディング画面 -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-chars" id="loadingChars"></div>
+  <div class="loading-ring"></div>
+  <div class="loading-text">Analyzing your night type...</div>
+</div>
+
+<canvas id="bg-canvas"></canvas>
+<div class="noise"></div>
+<nav class="navbar">
+  <a href="index.html" class="nav-logo">NightType</a>
+  <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+</nav>
+<div class="drawer" id="drawer">
+  <a href="index.html"><span class="icon">🏠</span>ホーム</a>
+  <a href="quiz.html"><span class="icon">🌙</span>診断する</a>
+  <a href="characters.html"><span class="icon">🎴</span>キャラ一覧</a>
+  <a href="compat.html"><span class="icon">💜</span>相性チェック</a>
+</div>
+<div class="drawer-overlay" id="drawer-overlay"></div>
+
+<div class="page">
+  <div class="result-wrap">
+    <p class="result-eyebrow">Your Night Type</p>
+    <div id="charVisual"></div>
+    <p class="result-tagline" id="typeTagline"></p>
+
+    <div class="result-card">
+      <div class="result-type-label">TYPE</div>
+      <div class="result-type-name" id="typeName">—</div>
+      <p class="result-desc" id="typeDesc">—</p>
+    </div>
+
+    <div class="compat-block">
+      <div class="compat-title"><div class="dot-good"></div>相性がいいタイプ</div>
+      <ul class="compat-list good" id="goodList"></ul>
+    </div>
+    <div class="compat-block" style="animation-delay:0.8s">
+      <div class="compat-title"><div class="dot-bad"></div>刺激が強すぎるタイプ</div>
+      <ul class="compat-list bad" id="badList"></ul>
+    </div>
+
+    <!-- シェアセクション -->
+    <div class="share-section">
+      <div class="share-title">Share your type</div>
+      <div class="card-preview-wrap">
+        <canvas id="shareCanvas" width="1080" height="1080"></canvas>
+      </div>
+      <div class="share-btns">
+        <button class="btn-x" id="shareX">
+          <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          Xでシェアする
+        </button>
+        <a class="btn-dl" id="downloadCard" download="my-nighttype.png">
+          ↓ 画像を保存する
+        </a>
+      </div>
+    </div>
+
+    <div class="result-actions" style="margin-top:14px">
+      <a href="compat.html" class="btn-compat">全タイプの相性を見る →</a>
+      <button class="btn-retry" onclick="location.href='quiz.html'">もう一度診断する</button>
+    </div>
+  </div>
+</div>
+
+<script src="./types.js"></script>
+<script>
+// ─── ローディング演出 ───
+const loadingEl = document.getElementById('loadingOverlay');
+const loadingChars = document.getElementById('loadingChars');
+const charKeys = Object.keys(types).slice(0,5);
+charKeys.forEach((k,i) => {
+  const t = types[k];
+  if(t.image){
+    const img = document.createElement('img');
+    img.src = t.image;
+    img.style.animationDelay = (i*0.1)+'s';
+    loadingChars.appendChild(img);
+  }
+});
+
+// ─── メイン処理 ───
+const scores = JSON.parse(localStorage.getItem('nightTypeScores'));
+let resultData = null;
+let resultType = null;
+
+if(!scores){
+  document.getElementById('typeName').textContent='診断データがありません';
+  document.getElementById('typeDesc').textContent='まず診断を受けてください。';
+  document.getElementById('charVisual').innerHTML='<div style="font-size:4rem;margin-bottom:24px">🌙</div>';
+  loadingEl.classList.add('hidden');
+} else {
+  resultType = Object.keys(scores).reduce((a,b)=>scores[a]>scores[b]?a:b);
+  resultData = types[resultType];
+
+  // キャラ画像プリロード後に表示
+  function revealResult() {
+    loadingEl.classList.add('hidden');
+
+    document.getElementById('charVisual').innerHTML = resultData.image
+      ? `<img src="${resultData.image}" alt="${resultData.name}" class="result-char-img"/>`
+      : `<div class="result-char-fallback">${resultData.icon}</div>`;
+
+    document.getElementById('typeTagline').textContent = `"${resultData.tagline}"`;
+    document.getElementById('typeName').textContent = resultData.name;
+    document.getElementById('typeDesc').textContent = resultData.description;
+
+    // OGP動的書き換え
+    const ogImg = resultData.image ? window.location.origin+'/'+resultData.image : '';
+    document.querySelector('meta[property="og:title"]').content = `私の夜タイプは「${resultData.name}」`;
+    document.querySelector('meta[property="og:description"]').content = resultData.tagline;
+    document.querySelector('meta[name="twitter:title"]').content = `私の夜タイプは「${resultData.name}」`;
+    document.querySelector('meta[name="twitter:description"]').content = resultData.tagline;
+
+    resultData.good.forEach(code=>{
+      const li=document.createElement('li'); const t=types[code];
+      li.innerHTML=`<span class="ci">${t.image?`<img src="${t.image}" style="width:28px;height:28px;border-radius:8px;object-fit:cover;vertical-align:middle;margin-right:4px">`:t.icon}</span>${t.name}`;
+      document.getElementById('goodList').appendChild(li);
+    });
+    resultData.bad.forEach(code=>{
+      const li=document.createElement('li'); const t=types[code];
+      li.innerHTML=`<span class="ci">${t.image?`<img src="${t.image}" style="width:28px;height:28px;border-radius:8px;object-fit:cover;vertical-align:middle;margin-right:4px">`:t.icon}</span>${t.name}`;
+      document.getElementById('badList').appendChild(li);
+    });
+
+    // シェアカード生成
+    generateShareCard();
+  }
+
+  if(resultData.image){
+    const preload = new Image();
+    preload.crossOrigin = 'anonymous';
+    preload.onload = () => setTimeout(revealResult, 1200);
+    preload.onerror = () => setTimeout(revealResult, 1200);
+    preload.src = resultData.image;
+  } else {
+    setTimeout(revealResult, 1200);
+  }
+}
+
+// ─── シェアカード Canvas生成 ───
+function generateShareCard() {
+  const canvas = document.getElementById('shareCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = 1080, H = 1080;
+  canvas.width = W; canvas.height = H;
+
+  // 背景グラデーション
+  const bg = ctx.createRadialGradient(W*0.3,H*0.2,0,W*0.3,H*0.2,W*0.8);
+  bg.addColorStop(0,'#1a0a2e');
+  bg.addColorStop(0.5,'#0e0814');
+  bg.addColorStop(1,'#070708');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,W,H);
+
+  // パープルオーブ
+  const orb1 = ctx.createRadialGradient(W*0.15,H*0.25,0,W*0.15,H*0.25,300);
+  orb1.addColorStop(0,'rgba(124,58,237,0.35)');
+  orb1.addColorStop(1,'transparent');
+  ctx.fillStyle = orb1; ctx.fillRect(0,0,W,H);
+
+  const orb2 = ctx.createRadialGradient(W*0.85,H*0.75,0,W*0.85,H*0.75,250);
+  orb2.addColorStop(0,'rgba(236,72,153,0.25)');
+  orb2.addColorStop(1,'transparent');
+  ctx.fillStyle = orb2; ctx.fillRect(0,0,W,H);
+
+  // ランダム星
+  ctx.fillStyle='rgba(220,200,255,0.5)';
+  for(let i=0;i<120;i++){
+    const x=Math.random()*W, y=Math.random()*H, r=Math.random()*1.5+0.3;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+
+  // ロゴ
+  ctx.font = 'bold 36px sans-serif';
+  ctx.fillStyle = 'rgba(168,85,247,0.8)';
+  ctx.textAlign = 'center';
+  ctx.fillText('NightType', W/2, 70);
+
+  // サブタイトル
+  ctx.font = '24px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('夜の価値観タイプ診断', W/2, 110);
+
+  // キャラ画像（丸くクリップ）
+  const drawTextFallback = () => {
+    // アイコン絵文字フォールバック
+    ctx.font = '220px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(resultData.icon, W/2, H*0.47);
+    drawCardText();
+  };
+
+  if(resultData.image){
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const cx=W/2, cy=H*0.42, r=220;
+      // グロー
+      const glow = ctx.createRadialGradient(cx,cy,r*0.5,cx,cy,r*1.4);
+      glow.addColorStop(0,'rgba(124,58,237,0.4)');
+      glow.addColorStop(1,'transparent');
+      ctx.fillStyle=glow;
+      ctx.beginPath(); ctx.arc(cx,cy,r*1.4,0,Math.PI*2); ctx.fill();
+
+      // 丸くクリップして画像描画
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+      ctx.drawImage(img, cx-r, cy-r, r*2, r*2);
+      ctx.restore();
+
+      // ボーダー
+      ctx.strokeStyle='rgba(168,85,247,0.6)';
+      ctx.lineWidth=4;
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+
+      drawCardText();
+    };
+    img.onerror = drawTextFallback;
+    img.src = resultData.image;
+  } else {
+    drawTextFallback();
+  }
+
+  function drawCardText() {
+    // タグライン
+    ctx.font = 'italic 32px serif';
+    ctx.fillStyle = 'rgba(196,158,255,0.85)';
+    ctx.textAlign = 'center';
+    ctx.fillText(`"${resultData.tagline}"`, W/2, H*0.69);
+
+    // タイプ名
+    ctx.font = 'bold 72px sans-serif';
+    const grad = ctx.createLinearGradient(W*0.2,0,W*0.8,0);
+    grad.addColorStop(0,'#c4b5fd');
+    grad.addColorStop(1,'#f9a8d4');
+    ctx.fillStyle = grad;
+    ctx.fillText(resultData.name, W/2, H*0.78);
+
+    // 区切り線
+    ctx.strokeStyle='rgba(124,58,237,0.4)';
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(W*0.25,H*0.83); ctx.lineTo(W*0.75,H*0.83); ctx.stroke();
+
+    // 相性
+    ctx.font = '26px sans-serif';
+    ctx.fillStyle='rgba(255,255,255,0.4)';
+    const g1 = types[resultData.good[0]];
+    ctx.fillText(`相性◎ ${g1?.name ?? ''}`, W/2, H*0.88);
+
+    // URL
+    ctx.font = '22px sans-serif';
+    ctx.fillStyle='rgba(168,85,247,0.5)';
+    ctx.fillText('nighttype.jp', W/2, H*0.95);
+
+    // canvas→ダウンロードリンク
+    const url = canvas.toDataURL('image/png');
+    document.getElementById('downloadCard').href = url;
+  }
+}
+
+// ─── Xシェア ───
+document.getElementById('shareX')?.addEventListener('click', () => {
+  if(!resultData) return;
+  const text = `私の夜のタイプは「${resultData.name}」\n"${resultData.tagline}"\n\n#NightType #夜の価値観診断\n`;
+  const url = 'https://nighttype.jp';
+  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank');
+});
+</script>
+<script src="./common.js"></script>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>診断｜NightType</title>
+  <link rel="stylesheet" href="./style.css"/>
+  <style>
+    /* 診断中ローディング演出 */
+    .analyzing-overlay{
+      position:fixed;inset:0;z-index:300;background:var(--bg);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+      opacity:0;pointer-events:none;transition:opacity 0.5s;
+    }
+    .analyzing-overlay.show{opacity:1;pointer-events:all;}
+    .analyzing-title{font-family:'Syne',sans-serif;font-weight:800;font-size:1.5rem;
+      background:linear-gradient(135deg,var(--purple-ll),var(--pink-l));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;}
+    .analyzing-sub{font-size:0.72rem;color:var(--muted);letter-spacing:0.15em;text-align:center;}
+    .analyzing-bar-wrap{width:240px;height:3px;background:rgba(255,255,255,0.06);border-radius:999px;overflow:hidden;}
+    .analyzing-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--purple),var(--pink));border-radius:999px;transition:width 0.15s;}
+    .analyzing-chars{display:flex;gap:10px;margin-bottom:8px;}
+    .analyzing-chars img{width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--border);
+      opacity:0;transform:scale(0.5);transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);}
+    .analyzing-chars img.show{opacity:1;transform:scale(1);}
+  </style>
+  <!-- Google Analytics (GA_MEASUREMENT_IDをご自身のIDに置き換えてください) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'GA_MEASUREMENT_ID');
+  </script>
+</head>
+<body>
+<!-- 診断終了ローディング -->
+<div class="analyzing-overlay" id="analyzingOverlay">
+  <div class="analyzing-chars" id="analyzingChars"></div>
+  <div class="analyzing-title">タイプを分析中…</div>
+  <div class="analyzing-sub">あなたの夜の価値観を解析しています</div>
+  <div class="analyzing-bar-wrap"><div class="analyzing-bar" id="analyzingBar"></div></div>
+</div>
+
+<canvas id="bg-canvas"></canvas>
+<div class="noise"></div>
+<nav class="navbar">
+  <a href="index.html" class="nav-logo">NightType</a>
+  <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+</nav>
+<div class="drawer" id="drawer">
+  <a href="index.html"><span class="icon">🏠</span>ホーム</a>
+  <a href="quiz.html" class="active"><span class="icon">🌙</span>診断する</a>
+  <a href="characters.html"><span class="icon">🎴</span>キャラ一覧</a>
+  <a href="compat.html"><span class="icon">💜</span>相性チェック</a>
+</div>
+<div class="drawer-overlay" id="drawer-overlay"></div>
+
+<div class="page">
+  <div class="quiz-wrap">
+    <div class="quiz-header">
+      <div class="progress-top">
+        <span>Progress</span>
+        <span class="progress-num" id="progressText">1 / 24</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width:4%"></div>
+      </div>
+    </div>
+    <div class="q-card" id="qCard">
+      <div class="q-tag" id="qNum">Question 01</div>
+      <p id="question">読み込み中...</p>
+      <div class="q-deco"></div>
+    </div>
+    <div class="btn-group">
+      <button class="btn-yes" id="yesBtn">かなり当てはまる</button>
+      <button class="btn-no"  id="noBtn">あまり当てはまらない</button>
+    </div>
+  </div>
+</div>
+
+<script src="./questions.js"></script>
+<script src="./types.js"></script>
+<script>
+let idx=0; const scores={};
+const card=document.getElementById('qCard');
+const qEl=document.getElementById('question');
+const qNum=document.getElementById('qNum');
+const fill=document.getElementById('progressFill');
+const txt=document.getElementById('progressText');
+const overlay=document.getElementById('analyzingOverlay');
+const bar=document.getElementById('analyzingBar');
+
+// 分析画面用キャラ準備
+const aChars=document.getElementById('analyzingChars');
+Object.keys(types).slice(0,5).forEach(k=>{
+  const t=types[k]; if(!t.image) return;
+  const img=document.createElement('img'); img.src=t.image; aChars.appendChild(img);
+});
+
+function pad(n){return n<10?'0'+n:''+n;}
+function show(){
+  qEl.textContent=questions[idx].text;
+  qNum.textContent='Question '+pad(idx+1);
+  const pct=Math.max((idx/questions.length)*100,4);
+  fill.style.width=pct+'%';
+  txt.textContent=(idx+1)+' / '+questions.length;
+}
+
+function answer(val){
+  const type=questions[idx].type;
+  scores[type]=(scores[type]||0)+val;
+  idx++;
+  if(idx<questions.length){
+    card.classList.add('q-exit');
+    setTimeout(()=>{
+      card.classList.remove('q-exit'); show();
+      card.classList.add('q-enter');
+      setTimeout(()=>card.classList.remove('q-enter'),300);
+    },200);
+    fill.style.width=((idx/questions.length)*100)+'%';
+    txt.textContent=(idx+1)+' / '+questions.length;
+  } else {
+    // 分析ローディング演出
+    fill.style.width='100%';
+    localStorage.setItem('nightTypeScores',JSON.stringify(scores));
+    overlay.classList.add('show');
+    // キャラを順番に表示
+    const imgs=aChars.querySelectorAll('img');
+    imgs.forEach((im,i)=>setTimeout(()=>im.classList.add('show'),i*180));
+    // バー進行
+    let p=0;
+    const iv=setInterval(()=>{
+      p=Math.min(p+2,100);
+      bar.style.width=p+'%';
+      if(p>=100){clearInterval(iv);setTimeout(()=>window.location.href='result.html',400);}
+    },30);
+  }
+}
+
+document.getElementById('yesBtn').addEventListener('click',()=>answer(1));
+document.getElementById('noBtn').addEventListener('click',()=>answer(0));
+show();
+</script>
+<script src="./common.js"></script>
+</body>
+</html>
